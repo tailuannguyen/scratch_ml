@@ -56,10 +56,10 @@ class DecisionTree(object):
         :param y: labels
         :return: accuracy of predictions on X
         """
-        preds = self.predict(X)
-        acc = sum(preds == y) / len(preds)
-        return acc
-
+        # preds = self.predict(X)
+        # acc = sum(preds == y) / len(preds)
+        # return acc
+        pass
 
     def split_node(self, node: Node, X: pd.DataFrame, y: pd.Series) -> None:
         """
@@ -86,6 +86,13 @@ class DecisionTree(object):
         """
         # Check if the node is pure (all labels are the same)
         # Check if the maximum depth is reached
+        if (self.min_samples_split is not None and node.size <= self.min_samples_split):
+            return True
+        if self.max_depth is not None and node.depth >= self.max_depth:
+            return True
+        if node.single_class:
+            return True
+        return False
         pass
 
     def gini(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
@@ -97,9 +104,44 @@ class DecisionTree(object):
         :param feature: name of the feature you want to use to get gini score
         :return:
         """
-        pass
+        # Error handling
+        if feature not in X.columns:
+            raise ValueError(f"Feature '{feature}' not found in DataFrame columns.")
 
-    def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) ->float:
+        # Find gini index
+        x = X[feature]
+        total_sample = len(y)
+        gini_index = float('inf')
+        if str(x.dtype) == 'object': # Categorical feature
+            gini_index = 0.0
+            unique_values = x.unique()
+            for v in unique_values:
+                mask_index = x == v
+                y_subset = y[mask_index]
+                subset_size = len(y_subset)
+                if subset_size == 0: 
+                    continue
+                class_counts = y_subset.value_counts()
+                subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in class_counts)
+                gini_index += (subset_size / total_sample) * subset_gini
+        else: # Continuous features
+            sorted_unique_values = np.sort(x.unique())
+            for i in range(len(sorted_unique_values) - 1):
+                threshold = (sorted_unique_values[i] + sorted_unique_values[i+1]) / 2
+                left_mask_index = x < threshold
+                right_mask_index = x >= threshold
+                left_subset_size = len(y[left_mask_index])
+                right_subset_size = len(y[right_mask_index])
+                if left_subset_size == 0 or right_subset_size == 0:
+                    continue
+                left_subset_gini = 1.0 - sum((count / left_subset_size)**2 for count in y[left_mask_index].value_counts())
+                right_subset_gini = 1.0 - sum((count / right_subset_size)**2 for count in y[right_mask_index].value_counts())
+                weighted_subset_gini = (left_subset_size / total_sample) * left_subset_gini + (right_subset_size / total_sample) * right_subset_gini
+                if weighted_subset_gini < gini_index:
+                    gini_index = weighted_subset_gini
+        return gini_index if gini_index != float('inf') else 0.0
+
+    def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
         """
         Returns entropy of the give feature
 
