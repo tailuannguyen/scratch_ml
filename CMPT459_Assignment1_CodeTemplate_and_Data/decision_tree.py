@@ -104,27 +104,35 @@ class DecisionTree(object):
         :param feature: name of the feature you want to use to get gini score
         :return:
         """
-        # Error handling
+        # error handling
         if feature not in X.columns:
             raise ValueError(f"Feature '{feature}' not found in DataFrame columns.")
 
-        # Find gini index
+        # find gini index
         x = X[feature]
         total_sample = len(y)
-        gini_index = float('inf')
-        if str(x.dtype) == 'object': # Categorical feature
-            gini_index = 0.0
+
+        # handle categorical feature
+        if x.dtype == 'object':
+            weighted_subset_gini_index = 0.0
             unique_values = x.unique()
             for v in unique_values:
                 mask_index = x == v
-                y_subset = y[mask_index]
-                subset_size = len(y_subset)
+                subset_size = len(y[mask_index])
+
+                # nothing to calculate - skip value
                 if subset_size == 0: 
                     continue
-                class_counts = y_subset.value_counts()
-                subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in class_counts)
-                gini_index += (subset_size / total_sample) * subset_gini
-        else: # Continuous features
+
+                # calculate the subset v gini index
+                subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in y[mask_index].value_counts())
+
+                weighted_subset_gini_index += (subset_size / total_sample) * subset_gini
+            return weighted_subset_gini_index
+
+        # handle continuous feature
+        else:
+            best_gini_index = float('inf')
             sorted_unique_values = np.sort(x.unique())
             for i in range(len(sorted_unique_values) - 1):
                 threshold = (sorted_unique_values[i] + sorted_unique_values[i+1]) / 2
@@ -132,14 +140,21 @@ class DecisionTree(object):
                 right_mask_index = x >= threshold
                 left_subset_size = len(y[left_mask_index])
                 right_subset_size = len(y[right_mask_index])
+
+                # cannot split - skip threshold
                 if left_subset_size == 0 or right_subset_size == 0:
                     continue
+
+                # calculate gini index for the split
                 left_subset_gini = 1.0 - sum((count / left_subset_size)**2 for count in y[left_mask_index].value_counts())
                 right_subset_gini = 1.0 - sum((count / right_subset_size)**2 for count in y[right_mask_index].value_counts())
-                weighted_subset_gini = (left_subset_size / total_sample) * left_subset_gini + (right_subset_size / total_sample) * right_subset_gini
-                if weighted_subset_gini < gini_index:
-                    gini_index = weighted_subset_gini
-        return gini_index if gini_index != float('inf') else 0.0
+
+                # calculate weighted gini
+                weighted_gini_index_candidate = (left_subset_size / total_sample) * left_subset_gini + (right_subset_size / total_sample) * right_subset_gini
+                if weighted_gini_index_candidate < best_gini_index:
+                    best_gini_index = weighted_gini_index_candidate
+            return best_gini_index if best_gini_index != float('inf') else 0.0
+        
 
     def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
         """
@@ -150,4 +165,71 @@ class DecisionTree(object):
         :param feature: name of the feature you want to use to get entropy score
         :return:
         """
-        pass
+        # Input check
+        if feature not in X.columns:
+            raise ValueError(f"Feature '{feature}' not found in DataFrame columns.")
+        
+        x = X[feature]
+        sample_size = len(y)
+
+        # handle categorical feature
+        if x.dtype == 'object':
+            weighted_entropy = 0.0
+            unique_values = x.unique()
+
+            # calculate sub-entropy for each unique value
+            for v in unique_values:
+                mask_index = x == v
+                subset_size = len(y[mask_index])
+                subset_entropy = 0.0
+
+                # nothing to calculate - skip value
+                if subset_size == 0:
+                    continue
+
+                # calculate v's entropy
+                for count in y[mask_index].value_counts():
+                    if count > 0:
+                        prob = count / subset_size
+                        subset_entropy -= prob * np.log2(prob)
+            
+                # calculate weighted entropy
+                weighted_entropy += (subset_size / sample_size) * subset_entropy
+
+            return weighted_entropy
+        
+        # Handle continuous feature
+        else:
+            best_entropy = float('inf')
+            sorted_unique_value = np.sort(x.unique())
+            for i in range(len(sorted_unique_value) - 1):
+                threshold = (sorted_unique_value[i] + sorted_unique_value[i+1]) / 2
+                left_mask_index = x < threshold
+                right_mask_index = x >= threshold
+                left_subset_size = len(y[left_mask_index])
+                right_subset_size = len(y[right_mask_index])
+
+                # cannot split - skip threshold
+                if left_subset_size == 0 or right_subset_size == 0:
+                    continue
+
+                # calculate left entropy
+                left_subset_entropy = 0.0
+                for count in y[left_mask_index].value_counts():
+                    if count > 0:
+                        prob = count / left_subset_size
+                        left_subset_entropy -= prob * np.log2(prob)
+
+                # calculate right entropy
+                right_subset_entropy = 0.0
+                for count in y[right_mask_index].value_counts():
+                    if count > 0:
+                        prob = count / right_subset_size
+                        right_subset_entropy -= prob * np.log2(prob)
+
+                # calculate weighted entropy
+                weighted_entropy_candidate = (left_subset_size / sample_size) * left_subset_entropy + (right_subset_size / sample_size) * right_subset_entropy
+                if weighted_entropy_candidate < best_entropy:
+                    best_entropy = weighted_entropy_candidate
+                    # best_threshold = threshold
+            return best_entropy if best_entropy != float('inf') else 0.0
