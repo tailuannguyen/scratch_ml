@@ -104,58 +104,67 @@ class DecisionTree(object):
         :param feature: name of the feature you want to use to get gini score
         :return:
         """
+
         # error handling
         if feature not in X.columns:
             raise ValueError(f"Feature '{feature}' not found in DataFrame columns.")
 
         # find gini index
         x = X[feature]
-        total_sample = len(y)
+        sample_size = len(y)
 
         # handle categorical feature
         if x.dtype == 'object':
-            weighted_subset_gini_index = 0.0
+
+            weighted_gini_index = 0.0
             unique_values = x.unique()
+
+            # calculate sub-gini for each unique value
             for v in unique_values:
+
                 mask_index = x == v
-                subset_size = len(y[mask_index])
+                subset_y = y[mask_index]
+                subset_size = len(subset_y)
 
                 # nothing to calculate - skip value
                 if subset_size == 0: 
                     continue
 
-                # calculate the subset v gini index
-                subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in y[mask_index].value_counts())
+                subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in subset_y.value_counts())
+                weighted_gini_index += (subset_size / sample_size) * subset_gini
 
-                weighted_subset_gini_index += (subset_size / total_sample) * subset_gini
-            return weighted_subset_gini_index
+            return weighted_gini_index
 
         # handle continuous feature
         else:
+
             best_gini_index = float('inf')
             sorted_unique_values = np.sort(x.unique())
+
+            # try splitting at each threshold
             for i in range(len(sorted_unique_values) - 1):
+
                 threshold = (sorted_unique_values[i] + sorted_unique_values[i+1]) / 2
                 left_mask_index = x < threshold
                 right_mask_index = x >= threshold
-                left_subset_size = len(y[left_mask_index])
-                right_subset_size = len(y[right_mask_index])
+                left_subset_y = y[left_mask_index]
+                right_subset_y = y[right_mask_index]
+                left_subset_size = len(left_subset_y)
+                right_subset_size = len(right_subset_y)
 
                 # cannot split - skip threshold
                 if left_subset_size == 0 or right_subset_size == 0:
                     continue
 
                 # calculate gini index for the split
-                left_subset_gini = 1.0 - sum((count / left_subset_size)**2 for count in y[left_mask_index].value_counts())
-                right_subset_gini = 1.0 - sum((count / right_subset_size)**2 for count in y[right_mask_index].value_counts())
+                left_subset_gini = 1.0 - sum((count / left_subset_size)**2 for count in left_subset_y.value_counts())
+                right_subset_gini = 1.0 - sum((count / right_subset_size)**2 for count in right_subset_y.value_counts())
 
                 # calculate weighted gini
-                weighted_gini_index_candidate = (left_subset_size / total_sample) * left_subset_gini + (right_subset_size / total_sample) * right_subset_gini
+                weighted_gini_index_candidate = (left_subset_size / sample_size) * left_subset_gini + (right_subset_size / sample_size) * right_subset_gini
                 if weighted_gini_index_candidate < best_gini_index:
                     best_gini_index = weighted_gini_index_candidate
-            return best_gini_index if best_gini_index != float('inf') else 0.0
         
-
     def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
         """
         Returns entropy of the give feature
@@ -165,6 +174,7 @@ class DecisionTree(object):
         :param feature: name of the feature you want to use to get entropy score
         :return:
         """
+
         # Input check
         if feature not in X.columns:
             raise ValueError(f"Feature '{feature}' not found in DataFrame columns.")
@@ -174,21 +184,24 @@ class DecisionTree(object):
 
         # handle categorical feature
         if x.dtype == 'object':
+
             weighted_entropy = 0.0
             unique_values = x.unique()
 
             # calculate sub-entropy for each unique value
             for v in unique_values:
+
                 mask_index = x == v
-                subset_size = len(y[mask_index])
+                subset_y = y[mask_index]
+                subset_size = len(subset_y)
                 subset_entropy = 0.0
 
                 # nothing to calculate - skip value
                 if subset_size == 0:
                     continue
 
-                # calculate v's entropy
-                for count in y[mask_index].value_counts():
+                # calculate value's entropy
+                for count in subset_y.value_counts():
                     if count > 0:
                         prob = count / subset_size
                         subset_entropy -= prob * np.log2(prob)
@@ -200,9 +213,13 @@ class DecisionTree(object):
         
         # Handle continuous feature
         else:
+
             best_entropy = float('inf')
             sorted_unique_value = np.sort(x.unique())
+
+            # try splitting at each threshold
             for i in range(len(sorted_unique_value) - 1):
+
                 threshold = (sorted_unique_value[i] + sorted_unique_value[i+1]) / 2
                 left_mask_index = x < threshold
                 right_mask_index = x >= threshold
@@ -232,4 +249,5 @@ class DecisionTree(object):
                 if weighted_entropy_candidate < best_entropy:
                     best_entropy = weighted_entropy_candidate
                     # best_threshold = threshold
+
             return best_entropy if best_entropy != float('inf') else 0.0
