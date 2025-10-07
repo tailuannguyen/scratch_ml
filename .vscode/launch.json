@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Decision Tree Main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/CMPT459_Assignment1_CodeTemplate_and_Data/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/CMPT459_Assignment1_CodeTemplate_and_Data",
+            "args": [
+                "--criterion", "entropy",
+                "--maxdepth", "5",
+                "--min-sample-split", "20"
+            ]
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${fileDirname}"
+        }
+    ]
+}
