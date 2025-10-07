@@ -76,6 +76,80 @@ class DecisionTree(object):
         HINT4: Recursively split the child nodes until the stopping condition is met (e.g., max_depth or single_class).
         """
         # your code
+
+        # Check stopping conditions
+        if self.stopping_condition(node):
+            return # No splitting - node stays as a leaf
+
+        feature_best = None
+        impurity_best = float('inf')
+        threshold_best = None
+        
+        for feature in X.columns:
+            impurity = self.criterion_func(X, y, feature)
+            if impurity < impurity_best:
+                impurity_best = impurity
+                feature_best = feature
+        
+        node.name = feature_best
+        x = X[feature_best]
+
+        if x.dtype == 'object':
+            node.is_numerical = False
+            children = {}
+
+            for v in x.unique():
+                mask_index = x == v
+                X_subset, y_subset = X[mask_index], y[mask_index]
+                if len(y_subset) > 0:
+                    child_node = Node(node_size=len(y_subset),
+                                      node_class=y_subset.mode()[0] if len(y_subset.mode()) > 0 else y_subset.iloc[0],
+                                      depth=node.depth + 1,
+                                      single_class=(len(y_subset.unique()) == 1)
+                    )
+                    children[v] = child_node
+                    self.split_node(child_node, X_subset, y_subset)
+            if children:
+                node.is_leaf = False
+                node.set_children(children)
+
+        else:
+            node.is_numerical = True
+            threshold_best = self._get_best_threshold(X, y, feature_best)
+            node.threshold = threshold_best
+
+            # Split data into left subset and right subset of threshold
+            left_mask = x < threshold_best
+            right_mask = x >= threshold_best
+            X_left, y_left = X[left_mask], y[left_mask]
+            X_right, y_right = X[right_mask], y[right_mask]
+
+            # Create child nodes
+            children = {}
+            if len(y_left) > 0:
+                left_node = Node(
+                    node_size=len(y_left),
+                    node_class=y_left.mode()[0] if len(y_left.mode()) > 0 else y_left.iloc[0],
+                    depth=node.depth + 1,
+                    single_class=(len(y_left.unique()) == 1)
+                )
+                children['l'] = left_node
+                self.split_node(left_node, X_left, y_left)
+
+            if len(y_right) > 0:
+                right_node = Node(
+                    node_size=len(y_right),
+                    node_class=y_right.mode()[0] if len(y_right.mode()) > 0 else y_right.iloc[0],
+                    depth=node.depth + 1,
+                    single_class=(len(y_right.unique()) == 1)
+                )
+                children['ge'] = right_node
+                self.split_node(right_node, X_right, y_right)
+
+            if children:
+                node.is_leaf = False
+                node.set_children(children)
+
         pass
 
     def stopping_condition(self, node: Node) -> bool:
@@ -95,6 +169,57 @@ class DecisionTree(object):
             return True
         return False
         pass
+
+    def _calculate_impurity(self, y: pd.Series) -> float:
+        """
+        Calculates the impurity (Gini or Entropy) of a set of labels.
+        
+        :param y: labels
+        :return: impurity value
+        """
+
+        # Gini: 1.0 - sum(p_i^2)
+        if self.criterion == 'gini':
+            counts = y.value_counts(normalize=True)
+            return 1.0 - sum(counts ** 2)
+
+        # Entropy: -sum(p_i * log2(p_i))
+        else:
+            counts = y.value_counts(normalize=True)
+            return - sum(counts * np.log2(counts + 1e-9))  # Adding a small value to avoid log(0)
+        
+    def _get_best_threshold(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
+        """
+        Finds the best threshold to split a numerical feature.
+        
+        :param X: data
+        :param y: labels
+        :return: the best threshold value
+        """
+        x = X[feature]
+        threshold_best = None
+        impurity_best = float('inf')
+        sorted_unique_values = np.sort(x.unique())
+
+        for i in range(len(sorted_unique_values) - 1):
+            threshold = np.mean([sorted_unique_values[i], sorted_unique_values[i+1]])
+
+            mask_left = x < threshold
+            mask_right = x >= threshold
+            y_left_subset = y[mask_left]
+            y_right_subset = y[mask_right]
+
+            if len(y_left_subset) == 0 or len(y_right_subset) == 0:
+                continue
+            
+            impurity_left = self._calculate_impurity(y_left_subset)
+            impurity_right = self._calculate_impurity(y_right_subset)
+            impurity_weighted = (len(y_left_subset) / len(y)) * impurity_left + (len(y_right_subset) / len(y)) * impurity_right
+            if impurity_weighted < impurity_best:
+                impurity_best = impurity_weighted
+                threshold_best = threshold
+
+        return threshold_best
 
     def gini(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
         """
