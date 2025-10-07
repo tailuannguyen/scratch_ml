@@ -26,7 +26,6 @@ class DecisionTree(object):
         self.tree = None
         self.criterion_func = self.entropy if criterion == 'entropy' else self.gini
 
-
     def fit(self, X: pd.DataFrame, y: pd.Series)->float:
         """
         :param X: data
@@ -35,7 +34,19 @@ class DecisionTree(object):
         HINT1: You use self.tree to store the root of the tree
         HINT2: You should use self.split_node to split a node
         """
-        # Your code
+        root = Node(
+            node_size=len(y),
+            node_class=y.mode()[0] if len(y.mode()) > 0 else y.iloc[0],
+            depth=0,
+            single_class=(len(y.unique()) == 1)
+        )
+        
+        self.tree = root
+        
+        # Recursively split the tree starting from the root
+        self.split_node(root, X, y)
+        
+        # Return training accuracy
         return self.evaluate(X, y)
 
     def predict(self, X: pd.DataFrame)->np.ndarray:
@@ -47,7 +58,31 @@ class DecisionTree(object):
         HINT3: start traverasl from self.tree
         """
         predictions = []
-        # Your code
+        
+        for idx in X.index:
+            sample = X.loc[idx]
+            
+            # Start traversal from the root
+            current_node = self.tree
+            prev_node = None    
+            # Traverse the tree until we reach a leaf node
+            while not current_node.is_leaf:
+                # Get the feature value for the current decision node
+                feature_value = sample[current_node.name]
+                
+                # Move to the appropriate child node
+                prev_node = current_node
+                current_node = current_node.get_child_node(feature_value)
+                
+                # If get_child_node returns None (for unseen categorical values),
+                # use the current node's class as the prediction
+                if current_node is None:
+                    # Fallback: go back to parent and use its class
+                    current_node = prev_node
+                    break
+            
+            # Add the prediction (the class of the leaf node)
+            predictions.append(current_node.node_class)
         
         return np.array(predictions)
 
@@ -57,10 +92,9 @@ class DecisionTree(object):
         :param y: labels
         :return: accuracy of predictions on X
         """
-        # preds = self.predict(X)
-        # acc = sum(preds == y) / len(preds)
-        # return acc
-        pass
+        preds = self.predict(X)
+        acc = sum(preds == y) / len(preds)
+        return acc
 
     def split_node(self, node: Node, X: pd.DataFrame, y: pd.Series) -> None:
         """
@@ -86,14 +120,19 @@ class DecisionTree(object):
         threshold_best = None
         
         for feature in X.columns:
-            impurity = self.criterion_func(X, y, feature)
+            impurity, threshold = self.criterion_func(X, y, feature)
             if impurity < impurity_best:
                 impurity_best = impurity
                 feature_best = feature
+                threshold_best = threshold
+
+        if feature_best is None:
+            return # No valid feature to split on - node stays as a leaf
         
         node.name = feature_best
         x = X[feature_best]
 
+        # Handle categorical feature
         if x.dtype == 'object':
             node.is_numerical = False
             children = {}
@@ -108,14 +147,13 @@ class DecisionTree(object):
                                       single_class=(len(y_subset.unique()) == 1)
                     )
                     children[v] = child_node
-                    self.split_node(child_node, X_subset, y_subset)
-            if children:
-                node.is_leaf = False
-                node.set_children(children)
-
+                    self.split_node(child_node, X_subset.drop(columns=[feature_best]), y_subset)
+            
+            node.set_children(children)
+        
+        # Handle numerical feature
         else:
             node.is_numerical = True
-            threshold_best = self._get_best_threshold(X, y, feature_best)
             node.threshold = threshold_best
 
             # Split data into left subset and right subset of threshold
@@ -146,11 +184,7 @@ class DecisionTree(object):
                 children['ge'] = right_node
                 self.split_node(right_node, X_right, y_right)
 
-            if children:
-                node.is_leaf = False
-                node.set_children(children)
-
-        pass
+            node.set_children(children)
 
     def stopping_condition(self, node: Node) -> bool:
         """
@@ -168,7 +202,6 @@ class DecisionTree(object):
         if node.single_class:
             return True
         return False
-        pass
 
     def _calculate_impurity(self, y: pd.Series) -> float:
         """
@@ -221,14 +254,14 @@ class DecisionTree(object):
 
         return threshold_best
 
-    def gini(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
+    def gini(self, X: pd.DataFrame, y: pd.Series, feature: str) -> tuple[float, Optional[float]]:
         """
         Returns gini index of the give feature
 
         :param X: data
         :param y: labels
         :param feature: name of the feature you want to use to get gini score
-        :return:
+        :return: Tuple of (gini_score, threshold). Threshold is None for categorical features.
         """
 
         # error handling
@@ -259,12 +292,13 @@ class DecisionTree(object):
                 subset_gini = 1.0 - sum((count / subset_size) ** 2 for count in y_subset.value_counts())
                 weighted_gini_index += (subset_size / sample_size) * subset_gini
 
-            return weighted_gini_index
+            return weighted_gini_index, None
 
         # handle continuous feature
         else:
 
             best_gini_index = float('inf')
+            threshold_best = None
             sorted_unique_values = np.sort(x.unique())
 
             # try splitting at each threshold
@@ -290,17 +324,18 @@ class DecisionTree(object):
                 weighted_gini_index_candidate = (left_subset_size / sample_size) * left_subset_gini + (right_subset_size / sample_size) * right_subset_gini
                 if weighted_gini_index_candidate < best_gini_index:
                     best_gini_index = weighted_gini_index_candidate
-        
-            return best_gini_index if best_gini_index != float('inf') else 0.0
-        
-    def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) -> float:
+                    threshold_best = threshold
+            best_gini_index = best_gini_index if best_gini_index != float('inf') else 0.0
+            return best_gini_index, threshold_best
+
+    def entropy(self, X: pd.DataFrame, y: pd.Series, feature: str) -> tuple[float, Optional[float]]:
         """
         Returns entropy of the give feature
 
         :param X: data
         :param y: labels
         :param feature: name of the feature you want to use to get entropy score
-        :return:
+        :return: Tuple of (entropy_score, threshold). Threshold is None for categorical features.
         """
 
         # Input check
@@ -337,12 +372,13 @@ class DecisionTree(object):
                 # calculate weighted entropy
                 weighted_entropy += (subset_size / sample_size) * subset_entropy
 
-            return weighted_entropy
+            return weighted_entropy, None
         
         # Handle continuous feature
         else:
 
             best_entropy = float('inf')
+            threshold_best = None
             sorted_unique_value = np.sort(x.unique())
 
             # try splitting at each threshold
@@ -376,5 +412,6 @@ class DecisionTree(object):
                 weighted_entropy_candidate = (left_subset_size / sample_size) * left_subset_entropy + (right_subset_size / sample_size) * right_subset_entropy
                 if weighted_entropy_candidate < best_entropy:
                     best_entropy = weighted_entropy_candidate
-
-            return best_entropy if best_entropy != float('inf') else 0.0
+                    threshold_best = threshold
+            best_entropy = best_entropy if best_entropy != float('inf') else 0.0
+            return best_entropy, threshold_best
