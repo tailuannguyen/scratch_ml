@@ -37,6 +37,16 @@ def read_data(path: str) -> pd.DataFrame:
     data = pd.read_csv(path)
     return data
 
+def handle_missing_values(data: pd.DataFrame) -> pd.DataFrame:
+    for col in data.columns:
+        if data[col].dtype == 'object':
+            mode = data[col].mode()[0]
+            data[col] = data[col].replace('?', mode)
+        else:
+            mean = data[col].mean()
+            data[col] = data[col].replace('?', mean)
+    return data
+
 def main() -> None:
     """
     Main function to run the decision tree algorithm.
@@ -49,14 +59,9 @@ def main() -> None:
     # HINT: You can drop rows with missing values, or better, replace their values with the mean of the column
 
     # Replace missing values with mean for numerical columns and mode for categorical columns
-    for col in train_data.columns:
-        if train_data[col].dtype == 'object':
-            mode = train_data[col].mode()[0]
-            train_data[col] = train_data[col].replace('?', mode)
-        else:
-            mean = train_data[col].mean()
-            train_data[col] = train_data[col].replace('?', mean)
-
+    train_data = handle_missing_values(train_data)
+    test_data = handle_missing_values(test_data)
+    
     dt = DecisionTree(criterion=args['criterion'],
                       max_depth=args['maxdepth'],
                       min_samples_split=args['min_sample_split'])
