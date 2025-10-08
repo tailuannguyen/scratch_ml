@@ -8,11 +8,6 @@
             "program": "${workspaceFolder}/CMPT459_Assignment1_CodeTemplate_and_Data/main.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}/CMPT459_Assignment1_CodeTemplate_and_Data",
-            "args": [
-                "--criterion", "entropy",
-                "--maxdepth", "5",
-                "--min-sample-split", "20"
-            ]
         },
         {
             "name": "Python: Current File",
