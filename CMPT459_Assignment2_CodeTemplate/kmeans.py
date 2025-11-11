@@ -34,8 +34,21 @@ class KMeans():
         """
         if self.init == 'random':
             # your code
+            random_indices = np.random.choice(a=X.shape[0], size=self.n_clusters, replace=False)
+            self.centroids = X[random_indices]
         elif self.init == 'kmeans++':
             # your code
+            self.centroids = np.zeros((self.n_clusters, X.shape[1]))
+            # Initialize the first centroid randomly
+            first_centroid_index = np.random.choice(a=X.shape[0], size=1, replace=False)
+            self.centroids[0] = X[first_centroid_index]
+            # Initialized the remaining centroids
+            for k in range(1, self.n_clusters):              
+                distances = self.euclidean_distance(X, self.centroids[:k])
+                min_distances = np.min(distances, axis=1)
+                next_centroid_probs = min_distances / np.sum(min_distances)
+                next_centroid_index = np.random.choice(a=X.shape[0], size=1, replace=False, p=next_centroid_probs)
+                self.centroids[k] = X[next_centroid_index]
         else:
             raise ValueError('Centroid initialization method should either be "random" or "k-means++"')
 
@@ -48,6 +61,8 @@ class KMeans():
         :return: Returns a matrix `dist` where `dist_ij` is the distance between row i in X1 and row j in X2.
         """
         # your code
+        dists = np.sqrt(((X1[:, np.newaxis, :] - X2[np.newaxis, :, :]) ** 2).sum(axis=2))
+        return dists
 
     def silhouette(self, clustering: np.ndarray, X: np.ndarray):
         # your code
