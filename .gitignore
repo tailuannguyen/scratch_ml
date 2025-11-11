@@ -208,4 +208,6 @@ __marimo__/
 
 # macOS
 */.DS_Store
-.DS_Store
+.DS_Store*.csv
+CMPT459_Assignment2_CodeTemplate/scRNAseq_human_pancreas.csv
+*.DS_Store
