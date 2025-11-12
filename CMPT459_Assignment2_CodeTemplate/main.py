@@ -19,14 +19,14 @@ def parse_args():
     return(a.n_clusters, a.data)
 
 def read_data(data_path):
-    return anndata.read_csv(data_path)
+    return anndata.io.read_csv(data_path)
 
 def preprocess_data(adata: anndata.AnnData, scale :bool=True):
     """Preprocessing dataset: filtering genes/cells, normalization and scaling."""
     sc.pp.filter_cells(adata, min_counts=5000)
     sc.pp.filter_cells(adata, min_genes=500)
 
-    sc.pp.normalize_per_cell(adata, counts_per_cell_after=1e4)
+    sc.pp.normalize_total(adata, target_sum=1e4)
     adata.raw = adata
 
     sc.pp.log1p(adata)
@@ -47,8 +47,25 @@ def main():
     X = PCA(heart.X, 100)
     # Your code
 
+    kmean_random = KMeans(n_clusters=3, init='random', max_iter=300)
+    clustering_with_random_init = kmean_random.fit(X)
+
+    kmean_kmeanspp = KMeans(n_clusters=2, init='kmeans++', max_iter=300)
+    clustering_with_kmeans_init = kmean_kmeanspp.fit(X)
+
+    X = PCA(X, 2)
+
+    visualize_cluster(X[:, 0], X[:, 1], clustering_with_random_init)
+    visualize_cluster(X[:, 0], X[:, 1], clustering_with_kmeans_init)
+
 def visualize_cluster(x, y, clustering):
     #Your code
+    plt.scatter(x, y, c=clustering, cmap='viridis')
+    plt.xlabel('PCA Component 1')
+    plt.ylabel('PCA Component 2')
+    plt.title('KMeans Clustering Visualization')
+    plt.colorbar(label='Cluster Label')
+    plt.show()
 
 if __name__ == '__main__':
     main()
